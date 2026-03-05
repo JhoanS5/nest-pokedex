@@ -1,23 +1,37 @@
 import { Injectable } from '@nestjs/common';
-import axios, { AxiosInstance } from 'axios';
 import { PokeResponse } from './interfaces/poke-response.interface';
+import { InjectModel } from '@nestjs/mongoose';
+import { Pokemon } from 'src/pokemon/entities/pokemon.entity';
+import { Model } from 'mongoose';
+import { AxiosAdapter } from 'src/common/adapters/axios.adapter';
 
 @Injectable()
 export class SeedService {
-
-  private readonly axios: AxiosInstance = axios;
+  constructor(
+    @InjectModel(Pokemon.name)
+    private readonly pokemonModel: Model<Pokemon>,
+    private readonly http: AxiosAdapter,
+  ) {}
 
   async executeSeed(){
-    
-    const {data} = await this.axios.get<PokeResponse>('https://pokeapi.co/api/v2/pokemon?limit=10');
 
-    data.results.forEach(({name, url}) => {
+    await this.pokemonModel.deleteMany({}); //Delete * from pokemons
+    
+    const data = await this.http.get<PokeResponse>('https://pokeapi.co/api/v2/pokemon?limit=650');
+
+    const pokemonToInstert: {name: string, numberPokemon: number}[] = [];
+
+    data.results.forEach(async ({name, url}) => {
       const segments = url.split('/');
       const numberPokemon: number = +segments[segments.length - 2];
 
-      console.log({name, numberPokemon});
-    })
+      // const pokemon = await this.pokemonModel.create({name, numberPokemon}); La idea es solo hacer una consulta en la DB.
 
-    return data.results;
+      pokemonToInstert.push({name, numberPokemon}); // [{name: bulbasaur, no: 1}]
+    });
+
+    await this.pokemonModel.insertMany(pokemonToInstert);
+
+    return 'Seed Executed';
   }
 }
